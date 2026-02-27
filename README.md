@@ -1,95 +1,96 @@
-# PowerStack Pi Controller
+# PowerStack
 
-Tkinter GUI app for a Raspberry Pi 4 that can:
+PowerStack is a Raspberry Pi 4 desktop app for controlling the power state of a remote Ubuntu PC.
 
-- Send a remote `suspend` command to an Ubuntu PC over SSH
-- Pulse a relay (wired across the PC power switch header) to wake/power-toggle the PC
-- Schedule `suspend` and `wake` events at specific times (weekly or one-time dates)
-- Run a selected schedule event immediately for testing
+It provides:
 
-## GUI layout
+- Remote suspend over SSH
+- Wake/power-button pulse through a relay HAT
+- Weekly and one-time schedule events
+- A modular Tkinter GUI with separate windows for:
+  - suspend/relay configuration
+  - schedule event creation
+  - logs
 
-The app now uses a modular window layout:
+## Features
 
-- Main window:
-  - Schedule overview table with color-coded status
-  - `Suspend Now` / `Wake Now`
-  - Per-item `Start Selected` / `Pause Selected` / `Run Selected Now`
-  - Buttons to open the 3 dedicated windows
-- `Suspend Config` window:
-  - Remote SSH suspend settings
-  - Relay channel/pin/pulse settings
-  - `Test Relay` and `Save`
-- `Schedule Configuration` window:
-  - Full schedule editor (add/update/delete, weekly or one-time)
-- `Logs` window:
-  - Full runtime logs
+- `Suspend Now` and `Wake Now` actions from the main dashboard
+- Schedule overview with status color coding:
+  - `Enabled` (green)
+  - `Paused` (amber)
+  - `Completed` (gray; one-time events after execution)
+- Per-item controls on selected events:
+  - `Start`
+  - `Pause`
+  - `Run Now`
+  - `Remove Event`
+- Add-only schedule form window (`Schedule Config`)
+- One-time events auto-disable after firing once
 
-## Notes about the relay HAT (KEYESTUDIO KS0212)
+## Hardware Notes (KEYESTUDIO KS0212)
 
-The Amazon short link provided (`https://a.co/d/02SlqwPX`) returned `404`, but the model `KEYESTUDIO KS0212` is documented on the Keyestudio wiki.
+This project supports configurable relay settings and includes defaults for Keyestudio `KS0212` (4-channel relay HAT).
 
-For KS0212, the wiki sample maps the 4 relay channels to Raspberry Pi BCM GPIO pins:
+Common BCM mapping:
 
 - Relay 1 -> `BCM 4`
 - Relay 2 -> `BCM 22`
 - Relay 3 -> `BCM 6`
 - Relay 4 -> `BCM 26`
 
-The sample code indicates relay activation is `HIGH` (active-high), and this app defaults to:
+Default app relay settings:
 
-- `GPIO Pin = 4` (Relay 1)
+- `GPIO Pin = 4`
 - `Relay Active High = true`
 
-The app still exposes relay settings in the UI so you can choose a different channel/polarity if your board revision/jumper configuration differs:
+If your board revision differs, change the pin/polarity in `Suspend Config`.
 
-- `GPIO Pin`
-- `Relay Active High`
-- `Pulse (s)`
+## Installation
 
-Use the `Test Relay` button to pulse the relay using the current relay form values without saving them.
-
-Set these to match your HAT's channel input and trigger logic.
-
-## Raspberry Pi setup (Ubuntu or Raspberry Pi OS)
-
-1. Install packages:
+### 1. System packages
 
 ```bash
 sudo apt update
 sudo apt install -y python3 python3-tk python3-pip openssh-client
+```
+
+### 2. Python dependencies
+
+```bash
 pip3 install -r requirements.txt
 ```
 
-2. Enable GPIO access (on Raspberry Pi OS, typically available by default; otherwise ensure your user can access GPIO).
-
-3. Wire the relay output contacts in parallel with the PC's physical power button pins on the motherboard front-panel header.
-
-4. Set up SSH key-based access from the Pi to the Ubuntu PC:
+### 3. SSH setup (Pi -> Ubuntu PC)
 
 ```bash
 ssh-keygen -t ed25519
 ssh-copy-id user@ubuntu-pc
 ```
 
-5. On the Ubuntu PC, allow suspend via `systemctl suspend` for the SSH user (this depends on your policy/polkit setup).
+Ensure the remote user can run your suspend command (default: `systemctl suspend`).
 
-## Run
+### 4. Relay wiring
+
+Wire one relay channel contacts in parallel with the target PC motherboard power-button pins.
+
+## Usage
+
+Run:
 
 ```bash
 python3 app.py
 ```
 
-Config is stored at `~/.powerstack/config.json`.
+Configuration is stored at:
 
-## Safety and behavior
+`~/.powerstack/config.json`
 
-- `wake` uses a relay pulse to emulate a power button press.
-- If the PC is already running, a power-button pulse may trigger shutdown/suspend depending on Ubuntu power-button settings.
-- Test with a short pulse (for example `0.3`-`0.5` seconds).
-- One-time schedule events match a specific `YYYY-MM-DD` date plus time.
-- One-time schedule events are auto-disabled after they fire once.
-- Status coloring in schedule tables:
-  - `Enabled` = green
-  - `Paused` = amber
-  - `Completed` = gray (one-time events that have run)
+## Safety
+
+- A power-button pulse can shut down, suspend, or wake a PC depending on BIOS/OS power-button behavior.
+- Start with short pulses (`0.3` to `0.5` seconds) and test carefully.
+- Validate relay polarity (`active high` / `active low`) before production use.
+
+## License
+
+This project is licensed under the MIT License. See `LICENSE`.

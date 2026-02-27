@@ -70,7 +70,9 @@ class PowerStackApp:
         self.gpio_pin_var = tk.StringVar(value=str(relay.gpio_pin))
         self.relay_channel_var = tk.StringVar(value=self._channel_label_for_pin(relay.gpio_pin))
         self.active_high_var = tk.BooleanVar(value=relay.active_high)
-        self.pulse_var = tk.StringVar(value=str(relay.pulse_seconds))
+        self.wake_mode_var = tk.StringVar(value=relay.wake_mode)
+        self.wake_pulse_var = tk.StringVar(value=str(relay.wake_pulse_seconds))
+        self.toggle_pulse_var = tk.StringVar(value=str(relay.toggle_pulse_seconds))
         self.holdoff_var = tk.StringVar(value=str(relay.holdoff_seconds))
 
         self.event_label_var = tk.StringVar(value="")
@@ -117,6 +119,9 @@ class PowerStackApp:
             fill="x", padx=8, pady=(8, 4)
         )
         ttk.Button(system_card, text="Wake Now", command=lambda: self._run_action("wake")).pack(
+            fill="x", padx=8, pady=(0, 8)
+        )
+        ttk.Button(system_card, text="Toggle Power", command=lambda: self._run_action("toggle")).pack(
             fill="x", padx=8, pady=(0, 8)
         )
 
@@ -211,8 +216,9 @@ class PowerStackApp:
             ("Port", self.port_var),
             ("SSH Key", self.key_var),
             ("Suspend Cmd", self.suspend_cmd_var),
-            ("Pulse (s)", self.pulse_var),
+            ("Wake On (s)", self.wake_pulse_var),
             ("Holdoff (s)", self.holdoff_var),
+            ("Toggle On (s)", self.toggle_pulse_var),
         ]
 
         for idx, (label, var) in enumerate(items):
@@ -238,6 +244,13 @@ class PowerStackApp:
         ttk.Checkbutton(frame, text="Relay Active High", variable=self.active_high_var).grid(
             row=row_base + 1, column=0, columnspan=2, sticky="w", padx=4, pady=4
         )
+        ttk.Label(frame, text="Wake Mode").grid(row=row_base + 1, column=2, sticky="w", padx=4, pady=4)
+        ttk.Combobox(
+            frame,
+            textvariable=self.wake_mode_var,
+            values=["pulse", "toggle"],
+            state="readonly",
+        ).grid(row=row_base + 1, column=3, sticky="ew", padx=4, pady=4)
 
         button_row = ttk.Frame(frame)
         button_row.grid(row=row_base + 2, column=0, columnspan=4, sticky="e", pady=(8, 0))
@@ -270,7 +283,7 @@ class PowerStackApp:
         ttk.Combobox(
             form,
             textvariable=self.event_action_var,
-            values=["suspend", "wake"],
+            values=["suspend", "wake", "toggle"],
             state="readonly",
         ).grid(row=1, column=1, sticky="ew", padx=4, pady=4)
 
@@ -386,10 +399,15 @@ class PowerStackApp:
 
     def _relay_config_from_form(self) -> RelayConfig:
         self._apply_channel_selection_to_gpio_pin()
+        wake_mode = self.wake_mode_var.get().strip() or "pulse"
+        if wake_mode not in {"pulse", "toggle"}:
+            raise ValueError("Wake Mode must be 'pulse' or 'toggle'.")
         return RelayConfig(
             gpio_pin=int(self.gpio_pin_var.get().strip()),
             active_high=bool(self.active_high_var.get()),
-            pulse_seconds=float(self.pulse_var.get().strip()),
+            wake_mode=wake_mode,
+            wake_pulse_seconds=float(self.wake_pulse_var.get().strip()),
+            toggle_pulse_seconds=float(self.toggle_pulse_var.get().strip()),
             holdoff_seconds=float(self.holdoff_var.get().strip()),
         )
 
@@ -397,7 +415,10 @@ class PowerStackApp:
         try:
             temp_config = self._relay_config_from_form()
             self.relay.reconfigure(temp_config)
-            run_async(self.remote.wake_via_power_button, self._log)
+            if temp_config.wake_mode == "toggle":
+                run_async(lambda: self.remote.toggle_power(temp_config.toggle_pulse_seconds), self._log)
+            else:
+                run_async(lambda: self.remote.wake_via_power_button(temp_config.wake_pulse_seconds), self._log)
             self._log("Testing relay with current form settings (not saved).")
         except ValueError as exc:
             messagebox.showerror("Invalid relay settings", str(exc))
@@ -406,7 +427,21 @@ class PowerStackApp:
         if action == "suspend":
             run_async(lambda: self.remote.suspend(self.config.remote), self._log)
         elif action == "wake":
-            run_async(self.remote.wake_via_power_button, self._log)
+            if self.config.relay.wake_mode == "toggle":
+                run_async(
+                    lambda: self.remote.toggle_power(self.config.relay.toggle_pulse_seconds),
+                    self._log,
+                )
+            else:
+                run_async(
+                    lambda: self.remote.wake_via_power_button(self.config.relay.wake_pulse_seconds),
+                    self._log,
+                )
+        elif action == "toggle":
+            run_async(
+                lambda: self.remote.toggle_power(self.config.relay.toggle_pulse_seconds),
+                self._log,
+            )
         else:
             self._log(f"[ERROR] Unknown action: {action}")
 

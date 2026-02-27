@@ -6,6 +6,7 @@ It provides:
 
 - Remote suspend over SSH
 - Wake/power-button pulse through a relay HAT
+- Dedicated power-toggle relay action
 - Weekly and one-time schedule events
 - A modular Tkinter GUI with separate windows for:
   - suspend/relay configuration
@@ -15,6 +16,7 @@ It provides:
 ## Features
 
 - `Suspend Now` and `Wake Now` actions from the main dashboard
+- `Toggle Power` action from the main dashboard
 - Schedule overview with status color coding:
   - `Enabled` (green)
   - `Paused` (amber)
@@ -26,6 +28,7 @@ It provides:
   - `Remove Event`
 - Add-only schedule form window (`Schedule Config`)
 - One-time events auto-disable after firing once
+- Schedule action types: `suspend`, `wake`, `toggle`
 
 ## Hardware Notes (KEYESTUDIO KS0212)
 
@@ -42,8 +45,12 @@ Default app relay settings:
 
 - `GPIO Pin = 4`
 - `Relay Active High = true`
+- `Wake Mode = pulse`
+- `Wake On Time = 0.5s`
+- `Toggle On Time = 1.5s`
 
 If your board revision differs, change the pin/polarity in `Suspend Config`.
+You can also choose whether `wake` uses pulse behavior or toggle behavior, and tune on-times separately.
 
 ## Installation
 
@@ -94,3 +101,15 @@ Configuration is stored at:
 ## License
 
 This project is licensed under the MIT License. See `LICENSE`.
+
+## Recent Updates
+
+- Added separate relay on-time settings for wake and toggle behavior:
+  - `Wake On (s)`
+  - `Toggle On (s)`
+- Added configurable `Wake Mode`:
+  - `pulse` (wake uses wake on-time)
+  - `toggle` (wake uses toggle on-time)
+- Added dedicated `Toggle Power` action in the main dashboard.
+- Added `toggle` as a schedule action type.
+- Added backward compatibility for older config files that used `pulse_seconds`.

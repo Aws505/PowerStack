@@ -55,21 +55,21 @@ class RelayController:
         self._mock = False
         self._setup_device()
 
-    def pulse(self) -> None:
+    def pulse(self, on_seconds: float, label: str = "relay pulse") -> None:
         with self._lock:
             self.log(
-                f"Pulsing relay (GPIO {self.config.gpio_pin}) for {self.config.pulse_seconds:.2f}s."
+                f"{label}: pulsing relay (GPIO {self.config.gpio_pin}) for {on_seconds:.2f}s."
             )
             if self._mock or self._device is None:
-                time.sleep(self.config.pulse_seconds)
+                time.sleep(on_seconds)
                 time.sleep(self.config.holdoff_seconds)
-                self.log("Mock relay pulse complete.")
+                self.log(f"Mock {label} complete.")
                 return
             self._device.on()
-            time.sleep(self.config.pulse_seconds)
+            time.sleep(on_seconds)
             self._device.off()
             time.sleep(self.config.holdoff_seconds)
-            self.log("Relay pulse complete.")
+            self.log(f"{label} complete.")
 
 
 @dataclass
@@ -118,12 +118,19 @@ class RemotePcController:
             return CommandResult(False, f"Suspend command failed: {detail}")
         return CommandResult(True, "Suspend command sent successfully.")
 
-    def wake_via_power_button(self) -> CommandResult:
+    def wake_via_power_button(self, on_seconds: float) -> CommandResult:
         try:
-            self.relay.pulse()
+            self.relay.pulse(on_seconds=on_seconds, label="Wake action")
             return CommandResult(True, "Power button relay pulse sent.")
         except Exception as exc:
             return CommandResult(False, f"Relay pulse failed: {exc}")
+
+    def toggle_power(self, on_seconds: float) -> CommandResult:
+        try:
+            self.relay.pulse(on_seconds=on_seconds, label="Toggle power action")
+            return CommandResult(True, "Power toggle relay pulse sent.")
+        except Exception as exc:
+            return CommandResult(False, f"Relay toggle failed: {exc}")
 
 
 def run_async(fn: Callable[[], CommandResult], log: LogFn) -> None:

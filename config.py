@@ -22,7 +22,9 @@ class RemoteConfig:
 class RelayConfig:
     gpio_pin: int = 4
     active_high: bool = True
-    pulse_seconds: float = 0.5
+    wake_mode: str = "pulse"  # "pulse" or "toggle"
+    wake_pulse_seconds: float = 0.5
+    toggle_pulse_seconds: float = 1.5
     holdoff_seconds: float = 0.2
 
 
@@ -30,7 +32,7 @@ class RelayConfig:
 class ScheduleEvent:
     id: str
     label: str
-    action: str  # "suspend" or "wake"
+    action: str  # "suspend", "wake", or "toggle"
     time_hhmm: str
     recurrence: str = "weekly"  # "weekly" or "once"
     date_ymd: str = ""  # YYYY-MM-DD when recurrence == "once"
@@ -57,7 +59,13 @@ class AppConfig:
     @classmethod
     def from_dict(cls, raw: dict[str, Any]) -> "AppConfig":
         remote = RemoteConfig(**raw.get("remote", {}))
-        relay = RelayConfig(**raw.get("relay", {}))
+        relay_raw = dict(raw.get("relay", {}))
+        if "wake_pulse_seconds" not in relay_raw and "pulse_seconds" in relay_raw:
+            relay_raw["wake_pulse_seconds"] = relay_raw["pulse_seconds"]
+        relay_raw.pop("pulse_seconds", None)
+        relay = RelayConfig(**relay_raw)
+        if relay.wake_mode not in {"pulse", "toggle"}:
+            relay.wake_mode = "pulse"
         schedule = [ScheduleEvent(**e) for e in raw.get("schedule", [])]
         return cls(remote=remote, relay=relay, schedule=schedule)
 

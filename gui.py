@@ -8,7 +8,7 @@ from tkinter import messagebox, ttk
 
 from config import AppConfig, RelayConfig, ScheduleEvent
 from control import RelayController, RemotePcController, run_async
-from scheduler import EventScheduler
+from cron import CronManager
 
 
 WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
@@ -33,8 +33,7 @@ class PowerStackApp:
 
         self.relay = RelayController(self.config.relay, self._log)
         self.remote = RemotePcController(self.relay, self._log)
-        self.scheduler = EventScheduler(self._log, self._run_scheduled_event)
-        self.scheduler.set_events(self.config.schedule)
+        self.cron = CronManager()
 
         self.selected_event_id: str | None = None
 
@@ -54,7 +53,7 @@ class PowerStackApp:
         self._build_main_ui()
         self._refresh_schedule_tables()
 
-        self.scheduler.start()
+        self._sync_crontab()
         self._drain_log_queue()
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -103,6 +102,7 @@ class PowerStackApp:
         ttk.Button(nav, text="Suspend Config", command=self._open_suspend_config_window).pack(side="left", padx=4)
         ttk.Button(nav, text="Schedule Config", command=self._open_schedule_config_window).pack(side="left", padx=4)
         ttk.Button(nav, text="Logs", command=self._open_logs_window).pack(side="left", padx=4)
+        ttk.Button(nav, text="Refresh", command=self._reload_config).pack(side="left", padx=4)
 
         content = ttk.Frame(main)
         content.grid(row=1, column=0, sticky="nsew")
@@ -445,11 +445,6 @@ class PowerStackApp:
         else:
             self._log(f"[ERROR] Unknown action: {action}")
 
-    def _run_scheduled_event(self, event: ScheduleEvent) -> None:
-        self._run_action(event.action)
-        if event.recurrence == "once":
-            self.root.after(0, lambda event_id=event.id: self._auto_disable_one_time_event(event_id))
-
     def _add_event(self) -> None:
         event = self._event_from_form()
         if event is None:
@@ -500,6 +495,8 @@ class PowerStackApp:
             if event.id == event_id:
                 self._log(f"Running selected event now: '{event.label}' ({event.action}).")
                 self._run_action(event.action)
+                if event.recurrence == "once":
+                    self.root.after(0, lambda eid=event.id: self._auto_disable_one_time_event(eid))
                 return
 
     def _on_main_schedule_selected(self, _event: object | None = None) -> None:
@@ -598,7 +595,7 @@ class PowerStackApp:
 
     def _persist_schedule_changes(self) -> None:
         self.config.save()
-        self.scheduler.set_events(self.config.schedule)
+        self._sync_crontab()
 
     def _refresh_schedule_tables(self) -> None:
         self._populate_schedule_table(self.main_schedule_table)
@@ -743,8 +740,20 @@ class PowerStackApp:
             pass
         self.root.after(200, self._drain_log_queue)
 
+    def _sync_crontab(self) -> None:
+        try:
+            self.cron.sync(self.config.schedule)
+            self._log("Crontab synced.")
+        except Exception as exc:
+            self._log(f"[WARN] Crontab sync failed: {exc}")
+
+    def _reload_config(self) -> None:
+        self.config = AppConfig.load()
+        self._refresh_schedule_tables()
+        self._sync_crontab()
+        self._log("Config reloaded from disk.")
+
     def _on_close(self) -> None:
-        self.scheduler.stop()
         self.root.destroy()
 
 
